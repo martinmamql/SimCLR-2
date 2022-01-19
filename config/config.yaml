@@ -10,17 +10,17 @@ dataset_dir: "./data"
 
 # train options
 seed: 42 # sacred handles automatic seeding when passed in the config
-batch_size: 64
+batch_size: 256
 image_size: 64
 patch_size: 64 # for image transformation
 start_epoch: 0
-epochs: 10
+epochs: 100
 dataset: "celeba" # STL10
 pretrain: True
 
 # model options
 resnet: "resnet18"
-projection_dim: 64 # "[...] to project the representation to a 128-dimensional latent space"
+projection_dim: 512 # "[...] to project the representation to a 128-dimensional latent space"
 
 # loss options
 optimizer: "Adam" # or LARS (experimental)
@@ -29,9 +29,12 @@ temperature: 0.5 # see appendix B.7.: Optimal temperature under different batch 
 
 # reload options
 model_path: "save" # set to the directory containing `checkpoint_##.tar` 
-epoch_num: 10 # set to checkpoint number
+epoch_num: 100 # set to checkpoint number
 reload: False
 
-# logistic regression options
-logistic_batch_size: 256
-logistic_epochs: 500
+# Linear layer fine tuning options
+linear_batch_size: 256
+linear_epochs: 100
+# fair mix-up paper 
+target_id: 2 # for celebA classification, 2:attractive,
+

@@ -24,8 +24,6 @@ from simclr.modules.sync_batchnorm import convert_model
 
 from model import load_optimizer, save_model
 from utils import yaml_config_hook
-from torchsummary import summary
-from torchvision.models import resnet50
 
 def train(args, train_loader, model, criterion, optimizer, writer):
     loss_epoch = 0
