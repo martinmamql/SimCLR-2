@@ -24,7 +24,8 @@ from simclr.modules.sync_batchnorm import convert_model
 
 from model import load_optimizer, save_model
 from utils import yaml_config_hook
-
+from torchsummary import summary
+from torchvision.models import resnet50
 
 def train(args, train_loader, model, criterion, optimizer, writer):
     loss_epoch = 0
@@ -93,7 +94,7 @@ def main(gpu, args):
     )
 
     # initialize ResNet
-    encoder = get_resnet(args.resnet, pretrained=False)
+    encoder = get_resnet(args.resnet, args.dataset, pretrained=False)
     n_features = encoder.fc.in_features  # get dimensions of fc layer
 
     # initialize model

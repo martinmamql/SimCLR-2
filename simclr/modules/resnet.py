@@ -1,7 +1,8 @@
 import torchvision
+import torch.nn as nn
 
 
-def get_resnet(name, pretrained=False):
+def get_resnet(name, dataset=None, pretrained=False):
     resnets = {
         "resnet18": torchvision.models.resnet18(pretrained=pretrained),
         "resnet50": torchvision.models.resnet50(pretrained=pretrained),

@@ -14,7 +14,7 @@ batch_size: 64
 image_size: 64
 patch_size: 64 # for image transformation
 start_epoch: 0
-epochs: 100
+epochs: 10
 dataset: "celeba" # STL10
 pretrain: True
 
@@ -29,7 +29,7 @@ temperature: 0.5 # see appendix B.7.: Optimal temperature under different batch 
 
 # reload options
 model_path: "save" # set to the directory containing `checkpoint_##.tar` 
-epoch_num: 100 # set to checkpoint number
+epoch_num: 10 # set to checkpoint number
 reload: False
 
 # logistic regression options
