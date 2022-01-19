@@ -20,7 +20,7 @@ pretrain: True
 save_per_epoch: 10
 
 # conditional contrastive learning
-conditional_contrastive: False
+conditional_contrastive: True
 
 # model options
 resnet: "resnet18"

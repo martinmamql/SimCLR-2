@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import torch
 import torchvision
@@ -14,7 +15,7 @@ from dataset import MyCelebA
 
 from utils import yaml_config_hook
 from utils import confusion_matrix, equality_of_opportunity, equalized_odds, statistical_parity
-from models import load_model_path
+from model import load_model_path
 
 from sklearn.metrics import average_precision_score as ap
 #from sklearn.metrics import roc_auc_score as roc
@@ -120,7 +121,7 @@ def test(args, loader, simclr_model, model, criterion, optimizer):
         output = output.cpu().detach().numpy()
         y = y.cpu().detach().numpy()
 
-        output_combined.extend(output)
+        output_combined.extend(output > 0.5)
         y_combined.extend(y)
 
         acc = ap(y_true=y, y_score=output)
@@ -135,12 +136,14 @@ def test(args, loader, simclr_model, model, criterion, optimizer):
         loss_epoch += loss.item()
         
 
-    return loss_epoch, accuracy_epoch, output_combined, y_combined
+    return loss_epoch, accuracy_epoch, np.array(output_combined), np.array(y_combined)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SimCLR")
-    config = yaml_config_hook("./config/config.yaml")
+    config_file = "config/debug.yaml"
+    print(f"Using configuration: {config_file}")
+    config = yaml_config_hook(config_file)
     for k, v in config.items():
         parser.add_argument(f"--{k}", default=v, type=type(v))
 
@@ -161,8 +164,6 @@ if __name__ == "__main__":
             transform=TransformsSimCLR(size=args.image_size).test_transform,
         )
         test_dataset_protected_attribute = test_dataset.attr[:, 20] # gender is index 20
-        print(test_dataset_protected_attribute.shape)
-        assert False
     else:
         raise NotImplementedError
 
@@ -170,7 +171,7 @@ if __name__ == "__main__":
         train_dataset,
         batch_size=args.linear_batch_size,
         shuffle=True,
-        drop_last=True,
+        drop_last=False,
         num_workers=args.workers,
     )
 
@@ -178,7 +179,7 @@ if __name__ == "__main__":
         test_dataset,
         batch_size=args.linear_batch_size,
         shuffle=False,
-        drop_last=True,
+        drop_last=False,
         num_workers=args.workers,
     )
 
@@ -220,9 +221,11 @@ if __name__ == "__main__":
         loss_epoch, accuracy_epoch, output_all, y_all = test(
             args, arr_test_loader, simclr_model, model, criterion, optimizer
         )
+        output_all = torch.from_numpy(output_all)
+        y_all = torch.from_numpy(y_all)
         print(
-            f"\t Loss: {loss_epoch / len(arr_test_loader)}\t Accuracy: {accuracy_epoch / len(arr_test_loader)}"
-            f"\t Demographic Parity: {statistical_parity(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)"
-            f"\t Equalized Odds: {equalized_odds(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)"
-            f"\t Equalized Opportunity: {equality_of_opportunity(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)"
+            f"\t Loss: {loss_epoch / len(arr_test_loader)}\t Accuracy: {accuracy_epoch / len(arr_test_loader)}\n",
+            f"\t Demographic Parity: {statistical_parity(predictions=output_all, protected=test_dataset_protected_attribute)}\n",
+            f"\t Equalized Odds: {equalized_odds(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)}\n",
+            f"\t Equalized Opportunity: {equality_of_opportunity(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)}\n"
         )
