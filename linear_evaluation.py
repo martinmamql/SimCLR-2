@@ -118,29 +118,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if args.dataset == "STL10":
-        train_dataset = torchvision.datasets.STL10(
+    if args.dataset == "celeba":
+        train_dataset = MyCelebA(
             args.dataset_dir,
             split="train",
             download=True,
             transform=TransformsSimCLR(size=args.image_size).test_transform,
         )
-        test_dataset = torchvision.datasets.STL10(
+        test_dataset = MyCelebA(
             args.dataset_dir,
             split="test",
-            download=True,
-            transform=TransformsSimCLR(size=args.image_size).test_transform,
-        )
-    elif args.dataset == "CIFAR10":
-        train_dataset = torchvision.datasets.CIFAR10(
-            args.dataset_dir,
-            train=True,
-            download=True,
-            transform=TransformsSimCLR(size=args.image_size).test_transform,
-        )
-        test_dataset = torchvision.datasets.CIFAR10(
-            args.dataset_dir,
-            train=False,
             download=True,
             transform=TransformsSimCLR(size=args.image_size).test_transform,
         )
@@ -174,12 +161,12 @@ if __name__ == "__main__":
     simclr_model.eval()
 
     ## Logistic Regression
-    n_classes = 10  # CIFAR-10 / STL-10
-    model = LogisticRegression(simclr_model.n_features, n_classes)
+    n_classes = 20  # CIFAR-10 / STL-10
+    model = LogisticRegression(simclr_model.n_features, n_classes) # essetially a two-layer NN
     model = model.to(args.device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.BCELoss()
 
     print("### Creating features from pre-trained context model ###")
     (train_X, train_y, test_X, test_y) = get_features(
