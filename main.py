@@ -13,6 +13,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 # TensorBoard
 from torch.utils.tensorboard import SummaryWriter
 
+# CeleA
+from dataset import MyCelebA
+
 # SimCLR
 from simclr import SimCLR
 from simclr.modules import NT_Xent, get_resnet
@@ -63,16 +66,10 @@ def main(gpu, args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    if args.dataset == "STL10":
-        train_dataset = torchvision.datasets.STL10(
+    if args.dataset == "celeba":
+        train_dataset = MyCelebA(
             args.dataset_dir,
-            split="unlabeled",
-            download=True,
-            transform=TransformsSimCLR(size=args.image_size),
-        )
-    elif args.dataset == "CIFAR10":
-        train_dataset = torchvision.datasets.CIFAR10(
-            args.dataset_dir,
+            split="train",
             download=True,
             transform=TransformsSimCLR(size=args.image_size),
         )
