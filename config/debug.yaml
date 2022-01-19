@@ -14,13 +14,13 @@ batch_size: 256
 image_size: 64
 patch_size: 64 # for image transformation
 start_epoch: 0
-epochs: 100
+epochs: 10
 dataset: "celeba" # STL10
 pretrain: True
-save_per_epoch: 100
+save_per_epoch: 10
 
 # conditional contrastive learning
-conditional_contrastive: True
+conditional_contrastive: False
 
 # model options
 resnet: "resnet18"
@@ -28,17 +28,18 @@ projection_dim: 512 # "[...] to project the representation to a 128-dimensional 
 
 # loss options
 optimizer: "Adam" # or LARS (experimental)
+lr: 3.0e-4 
 weight_decay: 1.0e-6 # "optimized using LARS [...] and weight decay of 10−6"
 temperature: 0.5 # see appendix B.7.: Optimal temperature under different batch sizes
 
 # reload options
-model_path: "save" # set to the directory containing `checkpoint_##.tar` 
-epoch_num: 100 # set to checkpoint number
+model_path: "save/" # set to the directory containing `checkpoint_##.tar` 
+epoch_num: 10 # set to checkpoint number
 reload: False
 
 # Linear layer fine tuning options
 linear_batch_size: 256
-linear_epochs: 1
+linear_epochs: 10
 # fair mix-up paper 
 target_id: 2 # for celebA classification, 2:attractive,
 

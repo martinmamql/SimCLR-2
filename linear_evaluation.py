@@ -13,10 +13,12 @@ from simclr.modules.transformations import TransformsSimCLR
 from dataset import MyCelebA
 
 from utils import yaml_config_hook
+from utils import confusion_matrix, equality_of_opportunity, equalized_odds, statistical_parity
+from models import load_model_path
 
 from sklearn.metrics import average_precision_score as ap
-from sklearn.metrics import roc_auc_score as roc
-from sklearn.metrics import f1_score
+#from sklearn.metrics import roc_auc_score as roc
+#from sklearn.metrics import f1_score
 
 def inference(loader, simclr_model, device):
     feature_vector = []
@@ -102,6 +104,8 @@ def test(args, loader, simclr_model, model, criterion, optimizer):
     loss_epoch = 0
     accuracy_epoch = 0
     model.eval()
+    y_combined = []
+    output_combined = []
     for step, (x, y) in enumerate(loader):
         model.zero_grad()
 
@@ -116,6 +120,9 @@ def test(args, loader, simclr_model, model, criterion, optimizer):
         output = output.cpu().detach().numpy()
         y = y.cpu().detach().numpy()
 
+        output_combined.extend(output)
+        y_combined.extend(y)
+
         acc = ap(y_true=y, y_score=output)
         accuracy_epoch += acc
         
@@ -126,8 +133,9 @@ def test(args, loader, simclr_model, model, criterion, optimizer):
         #roc_epoch += roc_score
 
         loss_epoch += loss.item()
+        
 
-    return loss_epoch, accuracy_epoch
+    return loss_epoch, accuracy_epoch, output_combined, y_combined
 
 
 if __name__ == "__main__":
@@ -152,6 +160,9 @@ if __name__ == "__main__":
             download=True,
             transform=TransformsSimCLR(size=args.image_size).test_transform,
         )
+        test_dataset_protected_attribute = test_dataset.attr[:, 20] # gender is index 20
+        print(test_dataset_protected_attribute.shape)
+        assert False
     else:
         raise NotImplementedError
 
@@ -176,7 +187,7 @@ if __name__ == "__main__":
 
     # load pre-trained model from checkpoint
     simclr_model = SimCLR(encoder, args.projection_dim, n_features)
-    model_fp = os.path.join(args.model_path, "checkpoint_{}.tar".format(args.epoch_num))
+    model_fp = load_model_path(args)
     simclr_model.load_state_dict(torch.load(model_fp, map_location=args.device.type))
     simclr_model = simclr_model.to(args.device)
     simclr_model.eval()
@@ -206,10 +217,12 @@ if __name__ == "__main__":
             f"Epoch [{epoch}/{args.linear_epochs}]\t Loss: {loss_epoch / len(arr_train_loader)}\t Accuracy: {accuracy_epoch / len(arr_train_loader)}"
         )
 
-    # final testing
-    loss_epoch, accuracy_epoch = test(
-        args, arr_test_loader, simclr_model, model, criterion, optimizer
-    )
-    print(
-        f"[FINAL]\t Loss: {loss_epoch / len(arr_test_loader)}\t Accuracy: {accuracy_epoch / len(arr_test_loader)}"
-    )
+        loss_epoch, accuracy_epoch, output_all, y_all = test(
+            args, arr_test_loader, simclr_model, model, criterion, optimizer
+        )
+        print(
+            f"\t Loss: {loss_epoch / len(arr_test_loader)}\t Accuracy: {accuracy_epoch / len(arr_test_loader)}"
+            f"\t Demographic Parity: {statistical_parity(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)"
+            f"\t Equalized Odds: {equalized_odds(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)"
+            f"\t Equalized Opportunity: {equality_of_opportunity(labels=y_all, predictions=output_all, protected=test_dataset_protected_attribute)"
+        )

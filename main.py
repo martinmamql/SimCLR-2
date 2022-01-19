@@ -16,6 +16,9 @@ from torch.utils.tensorboard import SummaryWriter
 # CeleA
 from dataset import MyCelebA
 
+# Conditional Contrastive
+from dataset import ConditionalBatchSampler
+
 # SimCLR
 from simclr import SimCLR
 from simclr.modules import NT_Xent, get_resnet
@@ -65,6 +68,11 @@ def main(gpu, args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
+    #log_dir = path.join(
+    #    project_root, 'runs', base_dir,
+    #    datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+    #)
+
     if args.dataset == "celeba":
         train_dataset = MyCelebA(
             args.dataset_dir,
@@ -72,24 +80,41 @@ def main(gpu, args):
             download=True,
             transform=TransformsSimCLR(size=args.image_size),
         )
+        # protected attribute for conditional sampling
+        # https://www.kaggle.com/nageshsingh/gender-detection-using-inceptionv3-92-6-acc
+        train_dataset_protected_attribute = train_dataset.attr[:, 20] # gender is index 20
+      
+
     else:
         raise NotImplementedError
 
     if args.nodes > 1:
+        raise NotImplementedError
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=args.world_size, rank=rank, shuffle=True
         )
     else:
         train_sampler = None
 
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=(train_sampler is None),
-        drop_last=True,
-        num_workers=args.workers,
-        sampler=train_sampler,
-    )
+    if args.conditional_contrastive:
+        conditional_sampler = ConditionalBatchSampler(
+        train_dataset, args.batch_size, train_dataset_protected_attribute)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_sampler=conditional_sampler)
+
+        print("Conditional contrastive learning enabled")
+
+    else:
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=(train_sampler is None),
+            drop_last=True,
+            num_workers=args.workers,
+            sampler=train_sampler,
+        )
+        print("Conditional contrastive learning disabled")
 
     # initialize ResNet
     encoder = get_resnet(args.resnet, args.dataset, pretrained=False)
@@ -98,6 +123,7 @@ def main(gpu, args):
     # initialize model
     model = SimCLR(encoder, args.projection_dim, n_features)
     if args.reload:
+        raise NotImplementedError
         model_fp = os.path.join(
             args.model_path, "checkpoint_{}.tar".format(args.epoch_num)
         )
@@ -135,7 +161,7 @@ def main(gpu, args):
         if args.nr == 0 and scheduler:
             scheduler.step()
 
-        if args.nr == 0 and epoch % 10 == 0:
+        if args.nr == 0 and epoch % args.save_per_epoch == 0:
             save_model(args, model, optimizer)
 
         if args.nr == 0:
@@ -153,7 +179,7 @@ def main(gpu, args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="SimCLR")
-    config = yaml_config_hook("./config/config.yaml")
+    config = yaml_config_hook("./config/debug.yaml")
     for k, v in config.items():
         parser.add_argument(f"--{k}", default=v, type=type(v))
 

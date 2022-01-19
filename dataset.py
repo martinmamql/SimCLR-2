@@ -1,5 +1,8 @@
 import os
+import random
 import torch
+from torch.utils.data.sampler import Sampler
+from torch.utils.data.sampler import BatchSampler
 from torch import Tensor
 from pathlib import Path
 from typing import List, Optional, Sequence, Union, Any, Callable
@@ -9,8 +12,10 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import CelebA
 import zipfile
+
 # code from: https://github.com/AntixK/PyTorch-VAE/blob/master/dataset.py
 # normalization: https://github.com/chingyaoc/fair-mixup/blob/master/celeba/utils.py
+
 class MyCelebA(CelebA):
     """
     A work-around to address issues with pytorch's celebA dataset class.
@@ -18,100 +23,47 @@ class MyCelebA(CelebA):
     Download and Extract
     URL : https://drive.google.com/file/d/1m8-EBPgi5MRubrm6iQjafK2QMHDBMSfJ/view?usp=sharing
     """
-    
+    #def __init__(self, root, split, target_type, transform, target_transform, download) -> None:
+    #    super().__init__(root, split, target_type, transform, target_transform, download) 
+    #    
+    #    # protected attribute
+    #    # https://www.kaggle.com/nageshsingh/gender-detection-using-inceptionv3-92-6-acc
+    #    self.protected_attribute = self.attr[:, 20] # gender is index 20
+    #  
+    #    print(self.protected_attribute.shape)
+    #    assert False
+
     def _check_integrity(self) -> bool:
         return True
 
-def transform_CelebA():
-    return transforms.Compose([transforms.RandomHorizontalFlip(),
-                                              transforms.CenterCrop(148),
-                                              transforms.Resize(self.patch_size),
-                                              transforms.ToTensor(),
-                                              transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-class VAEDataset(LightningDataModule):
-    """
-    PyTorch Lightning data module 
-    Args:
-        data_dir: root directory of your dataset.
-        train_batch_size: the batch size to use during training.
-        val_batch_size: the batch size to use during validation.
-        patch_size: the size of the crop to take from the original images.
-        num_workers: the number of parallel workers to create to load data
-            items (see PyTorch's Dataloader documentation for more details).
-        pin_memory: whether prepared items should be loaded into pinned memory
-            or not. This can improve performance on GPUs.
-    """
+#def transform_CelebA():
+#    return transforms.Compose([transforms.RandomHorizontalFlip(),
+#                                              transforms.CenterCrop(148),
+#                                              transforms.Resize(self.patch_size),
+#                                              transforms.ToTensor(),
+#                                              transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+# https://www.scottcondron.com/jupyter/visualisation/audio/2020/12/02/dataloaders-samplers-collate.html
 
-    def __init__(
-        self,
-        data_path: str,
-        train_batch_size: int = 8,
-        val_batch_size: int = 8,
-        patch_size: Union[int, Sequence[int]] = (256, 256),
-        num_workers: int = 0,
-        pin_memory: bool = False,
-        **kwargs,
-    ):
-        super().__init__()
+def chunk(indices, chunk_size):
+    return torch.split(torch.tensor(indices), chunk_size)
 
-        self.data_dir = data_path
-        self.train_batch_size = train_batch_size
-        self.val_batch_size = val_batch_size
-        self.patch_size = patch_size
-        self.num_workers = num_workers
-        self.pin_memory = pin_memory
+class ConditionalBatchSampler(Sampler): # only sample from either group 0 or group 1 in a batch, not both
+    def __init__(self, dataset, batch_size, protected_attribute):
+        protected_attribute = protected_attribute.int()
+        assert len(torch.unique(protected_attribute)) == 2 # assert binary attribute
+        self.first_group_indices = [i for i in range(len(protected_attribute)) if protected_attribute[i] == 0]
+        self.second_group_indices = [i for i in range(len(protected_attribute)) if protected_attribute[i] == 1]
+        self.batch_size = batch_size
 
-    def setup(self, stage: Optional[str] = None) -> None:
-        train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-                                              transforms.CenterCrop(148),
-                                              transforms.Resize(self.patch_size),
-                                              transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                              transforms.ToTensor(),])
-        # same transformation as train 
-        val_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-                                            transforms.CenterCrop(148),
-                                            transforms.Resize(self.patch_size),
-                                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                            transforms.ToTensor(),])
-        
-        self.train_dataset = MyCelebA(
-            self.data_dir,
-            split='train',
-            transform=train_transforms,
-            download=False,
-        )
-        
-        self.val_dataset = MyCelebA(
-            self.data_dir,
-            split='test',
-            transform=val_transforms,
-            download=False,
-        )
-        
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(
-            self.train_dataset,
-            batch_size=self.train_batch_size,
-            num_workers=self.num_workers,
-            shuffle=True,
-            pin_memory=self.pin_memory,
-        )
+    def __iter__(self):
+        random.shuffle(self.first_group_indices)
+        random.shuffle(self.second_group_indices)
+        first_group_batches  = chunk(self.first_group_indices, self.batch_size)
+        second_group_batches = chunk(self.second_group_indices, self.batch_size)
+        combined = list(first_group_batches + second_group_batches)
+        combined = [batch.tolist() for batch in combined]
+        random.shuffle(combined)
+        return iter(combined)
 
-    def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
-        return DataLoader(
-            self.val_dataset,
-            batch_size=self.val_batch_size,
-            num_workers=self.num_workers,
-            shuffle=False,
-            pin_memory=self.pin_memory,
-        )
-    
-    def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
-        return DataLoader(
-            self.val_dataset,
-            batch_size=144,
-            num_workers=self.num_workers,
-            shuffle=True,
-            pin_memory=self.pin_memory,
-        )
-     
+    def __len__(self):
+        return (len(self.first_group_indices) + len(self.second_group_indices)) // self.batch_size
